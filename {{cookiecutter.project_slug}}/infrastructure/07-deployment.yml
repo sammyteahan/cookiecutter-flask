@@ -1,0 +1,204 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates CodeDeploy resources for application deployment.
+
+Parameters:
+  # Shared Params
+  AppName:
+    Type: String
+    Description: The name of the application
+    AllowedPattern: '[A-Za-z0-9]+'
+    ConstraintDescription: must be alphanumeric
+  BuildNumber:
+    Type: String
+    Description: The build version number. Should increment each time the stack is
+      updated.
+    AllowedPattern: \d+
+    ConstraintDescription: must be an integer
+    Default: 1
+  Environment:
+    Type: String
+    Description: The type of environment you are deploying.
+    ConstraintDescription: must be one of production, or staging
+    Default: staging
+    AllowedValues: [production, staging]
+
+  # Params from other stacks
+  AutoScalingGroupName:
+    Type: String
+    Description: The autoscaling group to deploy to.
+    Default: AppName AutoScalingGroup (production)
+  DeploymentBucketName:
+    Type: String
+    Description: The name of the application's deployment bucket
+    AllowedPattern: '[a-z][-a-z0-9]+'
+    ConstraintDescription: S3 bucket name must be between 5 and 40 characters and
+      be alphanumeric (plus hyphens)
+    Default: {{ cookiecutter.project_slug }}-deployment
+    MinLength: 5
+    MaxLength: 40
+  TargetGroupName:
+    Type: String
+    Description: The name of the target group.
+    Default: AppName-WebTG-production
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'production']
+
+Resources:
+  WebApplication:
+    Type: AWS::CodeDeploy::Application
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      ApplicationName: !Sub "${AppName}-Application-${Environment}"
+      ComputePlatform: Server
+  WebDeploymentConfig:
+    Type: AWS::CodeDeploy::DeploymentConfig
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      DeploymentConfigName: !Sub "${AppName}-DeploymentConfig-${Environment}"
+      MinimumHealthyHosts:
+        Type: HOST_COUNT
+        Value: !If [IsProduction, 2, 0]
+  DeploymentServicePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${AppName}DeploymentPolicy-${Environment}"
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: ec2:RunInstances
+            Resource: '*'
+          - Effect: Allow
+            Action: ec2:CreateTags
+            Resource: '*'
+          - Effect: Allow
+            Action: iam:PassRole
+            Resource: '*'
+  DeploymentServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2008-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codedeploy.us-east-2.amazonaws.com
+                - codedeploy.us-east-1.amazonaws.com
+                - codedeploy.us-west-1.amazonaws.com
+                - codedeploy.us-west-2.amazonaws.com
+                - codedeploy.eu-west-3.amazonaws.com
+                - codedeploy.ca-central-1.amazonaws.com
+                - codedeploy.eu-west-1.amazonaws.com
+                - codedeploy.eu-west-2.amazonaws.com
+                - codedeploy.eu-central-1.amazonaws.com
+                - codedeploy.ap-east-1.amazonaws.com
+                - codedeploy.ap-northeast-1.amazonaws.com
+                - codedeploy.ap-northeast-2.amazonaws.com
+                - codedeploy.ap-southeast-1.amazonaws.com
+                - codedeploy.ap-southeast-2.amazonaws.com
+                - codedeploy.ap-south-1.amazonaws.com
+                - codedeploy.sa-east-1.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+      - !Ref DeploymentServicePolicy
+      RoleName: !Sub "${AppName}ServerDeploymentRole-${Environment}"
+  WebDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      ApplicationName: !Ref WebApplication
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events: [DEPLOYMENT_FAILURE]
+      AutoScalingGroups: [!Ref AutoScalingGroupName]
+      DeploymentConfigName: !Ref WebDeploymentConfig
+      DeploymentGroupName: !Sub "${AppName}-DeploymentGroup-${Environment}"
+      DeploymentStyle:
+        DeploymentType: IN_PLACE
+        DeploymentOption:
+          !If [IsProduction, WITH_TRAFFIC_CONTROL, WITHOUT_TRAFFIC_CONTROL]
+      LoadBalancerInfo:
+        TargetGroupInfoList:
+          - Name: !Ref TargetGroupName
+      ServiceRoleArn: !GetAtt DeploymentServiceRole.Arn
+    DependsOn: DeploymentServiceRole
+  BitbucketDeployIAMPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${AppName}BitbucketDeployPolicy-${Environment}"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: CloudFormation0
+            Effect: Allow
+            Action:
+              - codedeploy:GetDeploymentInstance
+              - codedeploy:GetDeploymentGroup
+              - codedeploy:ListDeploymentInstances
+              - codedeploy:CreateDeployment
+              - codedeploy:GetApplicationRevision
+              - codedeploy:RegisterApplicationRevision
+              - codedeploy:GetDeploymentConfig
+              - codedeploy:ListDeploymentGroups
+              - codedeploy:GetDeployment
+              - codedeploy:ListDeployments
+              - codedeploy:ListApplicationRevisions
+              - codedeploy:GetApplication
+            Resource:
+              - !Sub "arn:aws:codedeploy:*:${AWS::AccountId}:deploymentgroup:${WebApplication}/${WebDeploymentGroup}"
+              - !Sub "arn:aws:codedeploy:*:${AWS::AccountId}:application:${WebApplication}"
+              - !Sub "arn:aws:codedeploy:*:${AWS::AccountId}:deploymentconfig:${WebDeploymentConfig}"
+          - Sid: CloudFormation1
+            Effect: Allow
+            Action:
+              - codedeploy:StopDeployment
+              - codedeploy:ContinueDeployment
+              - codedeploy:ListDeploymentConfigs
+              - codedeploy:ListApplications
+            Resource: '*'
+          - Sid: CloudFormation2
+            Effect: Allow
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:CreateMultipartUpload
+              - s3:GetObject
+              - s3:ListMultipartUploadParts
+              - s3:PutObject
+              - s3:PutObjectAcl
+            Resource:
+              - !Sub "arn:aws:s3:::${DeploymentBucketName}/*"
+  BitbucketDeployIAMGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub "${AppName}BitbucketDeployGroup-${Environment}"
+      ManagedPolicyArns: [!Ref BitbucketDeployIAMPolicy]
+  BitbucketDeployIAMUser:
+    Type: AWS::IAM::User
+    Properties:
+      Groups: [!Ref BitbucketDeployIAMGroup]
+      UserName: !Sub "${AppName}-codeship-deploy-${Environment}"
+
+Outputs:
+  WebApplication:
+    Value: !Ref WebApplication
+    Description: The CodeDeploy application name.
+  WebDeploymentConfig:
+    Value: !Ref WebDeploymentConfig
+    Description: The CodeDeploy deployment config name.
+  BitbucketDeployIAMPolicy:
+    Value: !Ref BitbucketDeployIAMPolicy
+  BitbucketDeployIAMGroup:
+    Value: !Ref BitbucketDeployIAMGroup
+  BitbucketDeployIAMUser:
+    Value: !Ref BitbucketDeployIAMUser
+  DeploymentServicePolicy:
+    Value: !Ref DeploymentServicePolicy
+  DeploymentServiceRole:
+    Value: !Ref DeploymentServiceRole

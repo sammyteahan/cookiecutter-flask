@@ -1,0 +1,180 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create security groups with their ingress and egress rules.
+
+##
+# This template builds out the security groups for SSH, database, and
+# website access.
+#
+
+Parameters:
+  # Shared Params
+  AppName:
+    Type: String
+    Description: The name of the application
+    AllowedPattern: '[A-Za-z0-9]+'
+    ConstraintDescription: must be alphanumeric
+  BuildNumber:
+    Type: String
+    Description: The build version number. Should increment each time the stack is
+      updated.
+    AllowedPattern: \d+
+    ConstraintDescription: must be an integer
+    Default: 1
+  Environment:
+    Type: String
+    Description: The type of environment you are deploying.
+    ConstraintDescription: must be one of production or staging
+    Default: staging
+    AllowedValues: [production, staging]
+
+    # Params from other stacks
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC id of the VPC created in the VPC stack.
+
+  # Custom params
+  LocalCidrIPRange:
+    Type: String
+    Description: The IP address range of your local network (i.e. 192.168.0.0/16)
+    AllowedPattern: (\d{1,3}).(\d{1,3}).(\d{1,3}).(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must have a valid CIDR range
+    Default: 10.0.0.0/16
+    MaxLength: 18
+    MinLength: 9
+  HomeGatewayIPAddress:
+    Type: String
+    Description: The IP range from your office network (i.e. 199.16.150.162).
+    AllowedPattern: (\d{1,3}).(\d{1,3}).(\d{1,3}).(\d{1,3})
+    ConstraintDescription: must be a valid IP address
+    Default: 24.10.168.170
+    MaxLength: 15
+    MinLength: 7
+  OfficeGatewayIPAddress:
+    Type: String
+    Description: The IP range from your office network (i.e. 199.16.150.162).
+    AllowedPattern: (\d{1,3}).(\d{1,3}).(\d{1,3}).(\d{1,3})
+    ConstraintDescription: must be a valid IP address
+    Default: 199.16.150.162
+    MaxLength: 15
+    MinLength: 7
+
+Resources:
+  WebServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      GroupDescription: !Sub "${AppName} (${Environment}) Web Server Security Group"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        # Inbound HTTP/HTTPS traffic from load balancer
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: ::/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: ::/0
+        # SSH
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref LocalCidrIPRange
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Sub "${HomeGatewayIPAddress}/32"
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Sub "${OfficeGatewayIPAddress}/32"
+      SecurityGroupEgress:
+        # Communication with any 3rd-party service.
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIpv6: ::/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName} (${Environment}) Web Server SG"
+  WebDatabaseSG:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      GroupDescription: !Sub "${AppName} (${Environment}) Web Database Security
+        Group"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref WebServerSG
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+      SecurityGroupEgress: []
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName} (${Environment}) Web Database SG"
+  WebLoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      GroupDescription: !Sub "${AppName} (${Environment}) Web ELB Security Group"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: ::/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: ::/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          DestinationSecurityGroupId: !Ref WebServerSG
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationSecurityGroupId: !Ref WebServerSG
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName} (${Environment}) Web Load Balancer SG"
+
+Outputs:
+  WebServerSG:
+    Value: !Ref WebServerSG
+    Description: The public tier server security group ID
+  WebDatabaseSG:
+    Value: !Ref WebDatabaseSG
+    Description: The private tier web database security group ID
+  WebLoadBalancerSG:
+    Value: !Ref WebLoadBalancerSG
+    Description: The elastic load balancer security group ID.

@@ -1,0 +1,198 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create an Aurora PostgreSQL cluster and instance
+
+Parameters:
+  # Global params
+  AppName:
+    Type: String
+    Description: Name of the application.
+    AllowedValues: [SpectrumETL-Dev, SpectrumETL-QA, SpectrumETL-Production]
+    ConstraintDescription: must be one of SpectrumETL-Dev, SpectrumETL-QA, or
+      SpectrumETL-Production
+  BuildNumber:
+    Type: String
+    Description: The build version number; increment as you update the stack.
+    AllowedPattern: \d+
+    ConstraintDescription: integers only
+    Default: 1
+  Environment:
+    Type: String
+    Description: The type of environment you are provisioning.
+    AllowedValues: [production, staging]
+    ConstraintDescription: must be one of production, or staging.
+  AZ1:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: The first availability zone.
+    Default: us-west-2a
+  AZ2:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: The second availability zone.
+    ConstraintDescription: AZ2 must be a valid availability zone.
+    Default: us-west-2b
+
+  # Parameters from other stacks
+  DatabaseSG:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: The database security group ID to put the web database in.
+  PrivateTierSubnet1a:
+    Type: AWS::EC2::Subnet::Id
+    Description: The private tier subnet in AZ 1a
+  PrivateTierSubnet1b:
+    Type: AWS::EC2::Subnet::Id
+    Description: The private tier subnet in AZ 1b
+
+  # Custom Parameters
+  DBName:
+    Type: String
+    Description: The web application db name
+    AllowedPattern: '[A-Za-z]\w*'
+    ConstraintDescription: must be alphanumeric and start with a letter
+    Default: spectrum_qa
+  DBIdentifier:
+    Type: String
+    Description: The web application db instance name
+    AllowedPattern: '[A-Za-z]\w*'
+    ConstraintDescription: must be alphanumeric and start with a letter
+    Default: spectrum
+  DBSize:
+    Type: Number
+    Description: Size (in GB) of web application database instance
+    ConstraintDescription: must be a number between 5 and 6144
+    Default: 20
+    MinValue: 5
+    MaxValue: 6144
+  DBClass:
+    Type: String
+    Description: The db class of the web application database instance
+    ConstraintDescription: must be a valid db class instance
+    Default: db.t3.medium
+    AllowedValues: [
+      db.t3.micro, db.t3.small, db.t3.medium, db.t3.large, db.t3.xlarge,
+      db.t3.2xlarge, db.t2.micro, db.t2.small, db.t2.medium, db.t2.large,
+      db.t2.xlarge, db.t2.2xlarge, db.m5.large, db.m5.xlarge, db.m5.2xlarge,
+      db.m5.4xlarge, db.m5.12xlarge, db.m5.24xlarge, db.m4.large, db.m4.xlarge,
+      db.m4.2xlarge, db.m4.4xlarge, db.m4.10xlarge, db.m4.16xlarge, db.r5.large,
+      db.r5.xlarge, db.r5.2xlarge, db.r5.4xlarge, db.r5.12xlarge,
+      db.r5.24xlarge, db.r4.large, db.r4.xlarge, db.r4.2xlarge, db.r4.4xlarge,
+      db.r4.8xlarge, db.r4.16xlarge
+    ]
+  DBUsername:
+    Type: String
+    Description: The master username of the web application database
+    AllowedPattern: '[A-Za-z]\w{0,14}'
+    ConstraintDescription: must be alphanumeric and start with an alphabet
+      character (can include underscore, and should be 1 to 15 characters long)
+    Default: postgres
+  DBPassword:
+    Type: String
+    Description: The master password to the web application database
+    AllowedPattern: '[^ /@"'']*'
+    ConstraintDescription: must be between 8 and 64 characters and be printable
+      ascii besides '/', '@', '"', and ' '
+    MinLength: 8
+    MaxLength: 64
+    NoEcho: true
+  DBBackupDays:
+    Type: Number
+    Description: Days to retain backups for the web application database
+    ConstraintDescription: must be between 1 and 100
+    Default: 7
+    MinValue: 1
+    MaxValue: 100
+
+  # - Shared Database Params
+  DBVersion:
+    Type: String
+    Description: The postgres version for all databases
+    ConstraintDescription: must be a valid postgres version
+    Default: '13.8'
+    AllowedValues: ['15.2', '14.6', '13.8', '12.10', '12.8']
+
+Conditions:
+  UseMultiAZ: !Equals [!Ref Environment, 'production']
+
+Resources:
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      DBSubnetGroupDescription: Group of subnets for web database tier
+      SubnetIds:
+        - !Ref PrivateTierSubnet1a
+        - !Ref PrivateTierSubnet1b
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName} Web DB Subnet Group"
+        - Key: Tier
+          Value: Data
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties: 
+      AvailabilityZones:
+        - !Ref AZ1
+        - !Ref AZ2
+      BackupRetentionPeriod: !Ref DBBackupDays
+      DatabaseName: !Ref DBName
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      EnableCloudwatchLogsExports: 
+        - postgresql
+      Engine: aurora-postgresql
+      EngineMode: provisioned
+      EngineVersion: !Ref DBVersion
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      Port: 5432
+      PreferredBackupWindow: 06:00-06:30
+      PreferredMaintenanceWindow: sun:08:00-sun:08:30
+      StorageEncrypted: true
+      VpcSecurityGroupIds: 
+        - !Ref DatabaseSG
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName} Aurora PSQL Cluster"
+        - Key: Network
+          Value: Private
+        - Key: Tier
+          Value: Data
+  AuroraDatabase:
+    Type: AWS::RDS::DBInstance
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      AutoMinorVersionUpgrade: true
+      DBClusterIdentifier: !Ref AuroraCluster
+      AvailabilityZone: !If [UseMultiAZ, !Ref 'AWS::NoValue', !Ref AZ1]
+      DBInstanceClass: !Ref DBClass
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Engine: aurora-postgresql
+      EngineVersion: !Ref DBVersion
+      LicenseModel: postgresql-license
+      MultiAZ: !If [UseMultiAZ, true, false]
+      PubliclyAccessible: true
+      EnablePerformanceInsights: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName} Aurora PSQL Database"
+        - Key: Network
+          Value: Private
+        - Key: Tier
+          Value: Data
+
+Outputs:
+  DBSubnetGroup:
+    Value: !Ref DBSubnetGroup
+    Description: The logical ID of the db subnet group
+  AuroraDatabase:
+    Value: !Ref AuroraDatabase
+    Description: The db instance identifier of the RDS database
+  DBName:
+    Value: !Ref DBName
+    Description: The name of the database, as specified in the parameters
+  AuroraEndpointAddress:
+    Value: !GetAtt AuroraDatabase.Endpoint.Address
+    Description: The endpoint domain for the RDS db instance
+  AuroraEndpointPort:
+    Value: !GetAtt AuroraDatabase.Endpoint.Port
+    Description: The endpoint port of the RDS db instance

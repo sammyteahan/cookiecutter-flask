@@ -1,0 +1,283 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  Set up the application VPC structure, including subnets, gateways, routetables,
+  and security groups.
+
+##
+# This template creates a VPC with all of the necessary public and private
+# subnets.
+#
+
+Parameters:
+  # Shared Parameters
+  AppName:
+    Type: String
+    Description: The name of the application
+    AllowedPattern: "[A-Za-z0-9]+"
+    ConstraintDescription: must be alphanumeric
+  BuildNumber:
+    Type: String
+    Description: The build version number. Should increment each time the stack is
+      updated.
+    AllowedPattern: \d+
+    ConstraintDescription: must be an integer
+    Default: 1
+  Environment:
+    Type: String
+    Description: The type of environment you are deploying.
+    ConstraintDescription: must be one of production or staging
+    Default: staging
+    AllowedValues: [production, staging]
+  AZ1:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: The first availability zone.
+    Default: us-east-2a
+  AZ2:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: The second availability zone.
+    Default: us-east-2b
+
+  # Custom Parameters
+  VPCCidr:
+    Type: String
+    Description: The CIDR range (/16) of the VPC subnets.
+    ConstraintDescription: must be a valid CIDR range for /16 of the form x.x.x.x
+      (don't include /16)
+    Default: 10.0.0.0
+    AllowedValues: [
+      '10.0.0.0', '10.1.0.0', '10.2.0.0', '10.3.0.0', '10.4.0.0', '10.5.0.0',
+      '10.6.0.0', '10.7.0.0', '10.8.0.0', '10.9.0.0'
+    ]
+
+Mappings:
+  SubnetCIDRs:
+    10.0.0.0:
+      PublicTier1a: 10.0.0.0/24
+      PublicTier1b: 10.0.10.0/24
+      PrivateTier1a: 10.0.2.0/24
+      PrivateTier1b: 10.0.12.0/24
+    10.1.0.0:
+      PublicTier1a: 10.1.0.0/24
+      PublicTier1b: 10.1.10.0/24
+      PrivateTier1a: 10.1.2.0/24
+      PrivateTier1b: 10.1.12.0/24
+    10.2.0.0:
+      PublicTier1a: 10.2.0.0/24
+      PublicTier1b: 10.2.10.0/24
+      PrivateTier1a: 10.2.2.0/24
+      PrivateTier1b: 10.2.12.0/24
+    10.3.0.0:
+      PublicTier1a: 10.3.0.0/24
+      PublicTier1b: 10.3.10.0/24
+      PrivateTier1a: 10.3.2.0/24
+      PrivateTier1b: 10.3.12.0/24
+    10.4.0.0:
+      PublicTier1a: 10.4.0.0/24
+      PublicTier1b: 10.4.10.0/24
+      PrivateTier1a: 10.4.2.0/24
+      PrivateTier1b: 10.4.12.0/24
+    10.5.0.0:
+      PublicTier1a: 10.5.0.0/24
+      PublicTier1b: 10.5.10.0/24
+      PrivateTier1a: 10.5.2.0/24
+      PrivateTier1b: 10.5.12.0/24
+    10.6.0.0:
+      PublicTier1a: 10.6.0.0/24
+      PublicTier1b: 10.6.10.0/24
+      PrivateTier1a: 10.6.2.0/24
+      PrivateTier1b: 10.6.12.0/24
+    10.7.0.0:
+      PublicTier1a: 10.7.0.0/24
+      PublicTier1b: 10.7.10.0/24
+      PrivateTier1a: 10.7.2.0/24
+      PrivateTier1b: 10.7.12.0/24
+    10.8.0.0:
+      PublicTier1a: 10.8.0.0/24
+      PublicTier1b: 10.8.10.0/24
+      PrivateTier1a: 10.8.2.0/24
+      PrivateTier1b: 10.8.12.0/24
+    10.9.0.0:
+      PublicTier1a: 10.9.0.0/24
+      PublicTier1b: 10.9.10.0/24
+      PrivateTier1a: 10.9.2.0/24
+      PrivateTier1b: 10.9.12.0/24
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      CidrBlock: !Sub "${VPCCidr}/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+      - Key: Name
+        Value: !Sub "${AppName} VPC (${Environment})"
+  PublicTierSubnet1a:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref AZ1
+      CidrBlock: !FindInMap [SubnetCIDRs, !Ref VPCCidr, PublicTier1a]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: !Sub "${AppName} Public Tier Subnet 1a (${Environment})"
+      - Key: Network
+        Value: Public
+      - Key: Tier
+        Value: Web
+  PublicTierSubnet1b:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref AZ2
+      CidrBlock: !FindInMap [SubnetCIDRs, !Ref VPCCidr, PublicTier1b]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: !Sub "${AppName} Public Tier Subnet 1b (${Environment})"
+      - Key: Network
+        Value: Public
+      - Key: Tier
+        Value: Web
+  PrivateTierSubnet1a:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref AZ1
+      CidrBlock: !FindInMap [SubnetCIDRs, !Ref VPCCidr, PrivateTier1a]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: !Sub "${AppName} Private Tier Subnet 1a (${Environment})"
+      - Key: Network
+        Value: Private
+      - Key: Tier
+        Value: Data
+  PrivateTierSubnet1b:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref AZ2
+      CidrBlock: !FindInMap [SubnetCIDRs, !Ref VPCCidr, PrivateTier1b]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: !Sub "${AppName} Private Tier Subnet 1b (${Environment})"
+      - Key: Network
+        Value: Private
+      - Key: Tier
+        Value: Data
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Sub "${AppName} Internet Gateway (${Environment})"
+      - Key: Network
+        Value: Public
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+    DependsOn: InternetGateway
+  PublicTierRouteTable:
+    Type: AWS::EC2::RouteTable
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub "${AppName} Public Tier Route Table (${Environment})"
+  PrivateTierRouteTable:
+    Type: AWS::EC2::RouteTable
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub "${AppName} Private Tier Route Table (${Environment})"
+  PublicTierSubnetRouteTable1a:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      RouteTableId: !Ref PublicTierRouteTable
+      SubnetId: !Ref PublicTierSubnet1a
+  PublicTierSubnetRouteTable1b:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      RouteTableId: !Ref PublicTierRouteTable
+      SubnetId: !Ref PublicTierSubnet1b
+  PrivateTierSubnetRouteTable1a:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      RouteTableId: !Ref PrivateTierRouteTable
+      SubnetId: !Ref PrivateTierSubnet1a
+  PrivateTierSubnetRouteTable1b:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      RouteTableId: !Ref PrivateTierRouteTable
+      SubnetId: !Ref PrivateTierSubnet1b
+  PublicTierRouteIGW:
+    Type: AWS::EC2::Route
+    Metadata:
+      BuildNumber: !Ref BuildNumber
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicTierRouteTable
+    DependsOn:
+      - VPCGatewayAttachment
+      - PublicTierRouteTable
+
+Outputs:
+  VPC:
+    Value: !Ref VPC
+    Description: The VPC ID
+  PublicTierSubnet1a:
+    Value: !Ref PublicTierSubnet1a
+    Description: The Public Tier subnet in AZ 1a
+  PublicTierSubnet1b:
+    Value: !Ref PublicTierSubnet1b
+    Description: The Public Tier subnet in AZ 1b
+  PrivateTierSubnet1a:
+    Value: !Ref PrivateTierSubnet1a
+    Description: The Private Tier subnet in AZ 1a
+  PrivateTierSubnet1b:
+    Value: !Ref PrivateTierSubnet1b
+    Description: The Private Tier subnet in AZ 1b
+  InternetGateway:
+    Value: !Ref InternetGateway
+    Description: The Internet Gateway ID
+  PublicTierRouteTable:
+    Value: !Ref PublicTierRouteTable
+    Description: The Public Tier route table ID
+  PrivateTierRouteTable:
+    Value: !Ref PrivateTierRouteTable
+    Description: The Private Tier route table ID

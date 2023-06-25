@@ -1,0 +1,102 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create IAM roles necessary for servers.
+
+##
+# This template builds out the IAM resources for use by other CF templates.
+#
+
+Parameters:
+  # Global params
+  AppName:
+    Type: String
+    Description: The name of the application
+    AllowedPattern: '[A-Za-z0-9]+'
+    ConstraintDescription: must be alphanumeric
+  BuildNumber:
+    Type: String
+    Description: The build version number. Should increment each time the stack is
+      updated.
+    AllowedPattern: \d+
+    ConstraintDescription: must be an integer
+    Default: 1
+  Environment:
+    Type: String
+    Description: The type of environment you are deploying.
+    ConstraintDescription: must be one of production or staging
+    Default: staging
+    AllowedValues: [production, staging]
+
+  # Custom params
+  DeploymentBucketName:
+    Type: String
+    Description: The name of the application's deployment bucket (e.g. {{ cookiecutter.project_slug }}-deployment-staging)
+    AllowedPattern: '[a-z][-a-z0-9]+'
+    ConstraintDescription: S3 bucket name must be between 5 and 40 characters and
+      be alphanumeric (plus hyphens)
+    Default: {{ cookiecutter.project_slug}}-deployment
+    MinLength: 5
+    MaxLength: 40
+
+Resources:
+  ServerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${AppName}ServerPolicy-${Environment}"
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:Get*
+              - s3:List*
+            Resource:
+              - !Sub "arn:aws:s3:::${DeploymentBucketName}/*"
+              - arn:aws:s3:::aws-codedeploy-us-east-2/*
+              - arn:aws:s3:::aws-codedeploy-us-east-1/*
+              - arn:aws:s3:::aws-codedeploy-us-west-1/*
+              - arn:aws:s3:::aws-codedeploy-us-west-2/*
+              - arn:aws:s3:::aws-codedeploy-ca-central-1/*
+              - arn:aws:s3:::aws-codedeploy-eu-west-1/*
+              - arn:aws:s3:::aws-codedeploy-eu-west-2/*
+              - arn:aws:s3:::aws-codedeploy-eu-west-3/*
+              - arn:aws:s3:::aws-codedeploy-eu-central-1/*
+              - arn:aws:s3:::aws-codedeploy-ap-east-1/*
+              - arn:aws:s3:::aws-codedeploy-ap-northeast-1/*
+              - arn:aws:s3:::aws-codedeploy-ap-northeast-2/*
+              - arn:aws:s3:::aws-codedeploy-ap-southeast-1/*
+              - arn:aws:s3:::aws-codedeploy-ap-southeast-2/*
+              - arn:aws:s3:::aws-codedeploy-ap-south-1/*
+              - arn:aws:s3:::aws-codedeploy-sa-east-1/*
+  ServerIamInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2008-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'ec2.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+      - !Ref ServerPolicy
+      RoleName: !Sub "${AppName}ServerInstanceRole-${Environment}"
+  ServerIamRoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref ServerIamInstanceRole]
+      InstanceProfileName: !Sub "${AppName}ServerInstanceProfile-${Environment}"
+
+Outputs:
+  ServerPolicy:
+    Value: !Ref ServerPolicy
+    Description: The ARN of the S3 policy.
+  ServerIamInstanceRole:
+    Value: !Ref ServerIamInstanceRole
+    Description: The instance role name.
+  ServerIamRoleInstanceProfile:
+    Value: !Ref ServerIamRoleInstanceProfile
+    Description: The ARN of the instance profile.
+  ServerIamRoleInstanceProfileArn:
+    Value: !GetAtt ServerIamRoleInstanceProfile.Arn
+    Description: Fully qualified ARN of IAM instance profile.
