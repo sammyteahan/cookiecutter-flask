@@ -22,7 +22,7 @@ Once `cookiecutter` is installed, you can use this template by cloning it locall
 cookiecutter flask-scaffold/
 
 # use github uri directly
-cookiecutter git@github.com:gameday-support/scaffold.git
+cookiecutter git@github.com:sammyteahan/cookiecutter-flask.git
 ```
 
 #### Features
