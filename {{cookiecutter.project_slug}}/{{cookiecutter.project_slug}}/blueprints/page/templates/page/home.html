@@ -1,0 +1,9 @@
+{{'{% extends "layouts/index.html" %}'}}
+
+{{'{% block title %}'}}{{ cookiecutter.project_name }}{{'{% endblock %}'}}
+
+{{'{% block body %}'}}
+  <div class="flex mt-52 justify-center items-center">
+    <p class="text-2xl">Welcome to the {{ cookiecutter.project_name }} flask scaffold. To get started checkout app.py, or <a class="font-semibold underline decoration-sky-500" href="{{ '{{ url_for("user.login") }}' }}">login</a></p>
+  </div>
+{{'{% endblock %}'}}

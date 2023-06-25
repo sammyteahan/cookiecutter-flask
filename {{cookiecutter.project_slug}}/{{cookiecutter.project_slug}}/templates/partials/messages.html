@@ -1,0 +1,21 @@
+{% raw %}{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div>
+      <ul>
+        {% for category, message in messages %}
+          {% if category == "error" %}
+            <li class="flex justify-center items-center bg-red-400 text-white py-4">{{ message }}</li>
+          {% elif category == "warning" %}
+            <li class="flex justify-center items-center bg-amber-400 text-white py-4">{{ message }}</li>
+          {% elif category == "success" %}
+            <li class="flex justify-center items-center bg-teal-400 text-white py-4">{{ message }}</li>
+          {% elif category == "info" %}
+            <li class="flex justify-center items-center bg-sky-400 text-white py-4">{{ message }}</li>
+          {% else %}
+            <li class="flex justify-center items-center bg-sky-400 text-white py-4">{{ message }}</li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+{% endwith %}{% endraw %}

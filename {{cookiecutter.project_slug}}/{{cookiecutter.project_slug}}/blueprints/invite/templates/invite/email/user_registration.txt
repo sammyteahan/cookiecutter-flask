@@ -1,0 +1,8 @@
+Hi {{"{{ ctx.user.email }}"}},
+
+You've been invited to join {{ cookiecutter.project_name }}! Follow the link below to complete your registration.
+
+{{"{{ url_for('user.register', user_id=ctx.user.id, token=ctx.token, _external=True, _scheme='http') }}"}}
+
+Thanks,
+The {{ cookiecutter.project_name }} Team

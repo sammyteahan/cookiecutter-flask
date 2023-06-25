@@ -1,0 +1,6 @@
+{
+  "project_slug": "flask_scaffold",
+  "project_name": "Flask Scaffold",
+  "version": "0.1.0",
+  "timestamp": "{% now 'utc', '%Y%m%d%H%M' %}"
+}

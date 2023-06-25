@@ -1,0 +1,12 @@
+<header class="p-4 flex justify-between items-center bg-sky-600 text-white">
+  <a class="text-2xl" href="{{ '{{ url_for("page.home") }}' }}">{{ cookiecutter.project_name }}</a>
+  
+  <div>
+    {{"{% if current_user.is_authenticated %}"}}
+      <span class="font-semibold">{{"{{ current_user.email }}"}}</span> - 
+      <a class="font-semibold underline decoration-sky-500" href="{% raw %}{{ url_for('user.logout')}}{% endraw %}">Logout</a>
+    {% raw %}{% else %}{% endraw %}
+      <a href="{% raw %}{{ url_for('user.login') }}{% endraw %}">Login</a>
+    {%raw %}{% endif %}{% endraw %}
+  </div>
+</header>
