@@ -2,7 +2,7 @@
 
 [![forthebadge](https://forthebadge.com/images/badges/powered-by-energy-drinks.svg)](https://forthebadge.com)
 
-This is a [cookiecutter](https://github.com/cookiecutter/cookiecutter) template used to bootstrap a new Phoenix backed project. It aims to provide some best practices out of the box, and provide all the necessary infrastructure to get going quickly in any environment.
+This is a [cookiecutter](https://github.com/cookiecutter/cookiecutter) template used to bootstrap a new Flask backed project. It aims to provide some best practices out of the box, and provide all the necessary infrastructure to get going quickly in any environment.
 
 #### 🚧 System Requirements
 
